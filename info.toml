@@ -3,6 +3,7 @@ name = "Chat Clipboard"
 author = "Jorran"
 category = "Chat"
 version = "2.0.0"
+siteid = 985
 
 [script]
 dependencies = [ "BetterChat" ]
