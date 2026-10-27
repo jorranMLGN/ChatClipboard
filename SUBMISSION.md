@@ -39,7 +39,7 @@ A short cooldown stops a double click from sending the same message twice.
 
 Openplanet's plugin terms ask you to disclose AI use during review and in the AI classification settings, and plugins that are mostly AI generated may be refused. Edit this text so it matches what you did:
 
-> The code of this plugin was written with an AI assistant (Claude) under my direction. I decided on the features and design, reviewed all of the code and tested it in game.
+> The code of this plugin was written with Claude Code, Anthropic's AI coding agent (model: Claude Opus 5.5), under my direction. I decided on the features and design, reviewed all of the code and tested it in game.
 
 ## Checklist (Nederlands)
 
