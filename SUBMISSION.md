@@ -49,5 +49,4 @@ Openplanet's plugin terms ask you to disclose AI use during review and in the AI
 - [ ] Screenshots maken van het venster, de editor en de snelbalk. Geen AI-gemaakte thumbnail gebruiken; die zijn niet toegestaan.
 - [ ] AI-gebruik opgeven in het inzendformulier en bij de AI-classificatie op de site.
 - [ ] Optioneel: broncode op GitHub zetten en de link toevoegen.
-- [ ] Optioneel: een licentie kiezen (bijvoorbeeld MIT) en als `LICENSE` toevoegen.
 - [ ] Na goedkeuring de `siteid` van de pluginpagina in `info.toml` zetten, zodat updates via de plugin manager werken.

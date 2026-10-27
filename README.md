@@ -66,3 +66,7 @@ src/
 Better Chat has no API for extra buttons. `BetterChatButton.as` calls `UI::Begin()` with Better Chat's window title, which makes ImGui append to that window. This relies on Better Chat rendering before this plugin, and on its sidebar layout (6 buttons, 5 in big chat); check it after Better Chat updates. It can be turned off in the settings.
 
 Run `./build.ps1` to create `dist/ChatClipboard.op`, or `./build.ps1 -Install` to also copy it to your Openplanet plugins folder. Unsigned plugins only load with Openplanet's signature mode set to **Developer**.
+
+## License
+
+[MIT](LICENSE)

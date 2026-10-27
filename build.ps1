@@ -1,4 +1,4 @@
-# Packages the plugin as dist/ChatClipboard.op with only the files Openplanet needs.
+# Packages the plugin as dist/ChatClipboard.op with only the files Openplanet needs, plus the license.
 # Use -Install to copy it into the Openplanet plugins folder as well.
 param([switch]$Install)
 
@@ -12,7 +12,7 @@ $out = Join-Path $dist 'ChatClipboard.op'
 New-Item -ItemType Directory -Force $dist | Out-Null
 if (Test-Path $out) { Remove-Item $out }
 
-$files = @(Get-Item (Join-Path $root 'info.toml')) + @(Get-ChildItem (Join-Path $root 'src') -Recurse -File -Filter *.as)
+$files = @(Get-Item (Join-Path $root 'info.toml'), (Join-Path $root 'LICENSE')) + @(Get-ChildItem (Join-Path $root 'src') -Recurse -File -Filter *.as)
 
 # Built by hand instead of Compress-Archive, which writes backslashes into entry names on PowerShell 5.1
 $zip = [IO.Compression.ZipFile]::Open($out, 'Create')
