@@ -1,0 +1,8 @@
+[meta]
+name = "Chat Clipboard"
+author = "Jorran"
+category = "Chat"
+version = "2.0.0"
+
+[script]
+dependencies = [ "BetterChat" ]
