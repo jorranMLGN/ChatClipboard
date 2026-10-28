@@ -133,7 +133,7 @@ void RenderToolbar()
 		OpenEditor(-1);
 	}
 	UI::SameLine();
-	if (ToggleButton(S_EditMode, Icons::Cogs + " Edit", "Show buttons to duplicate, reorder and delete snippets")) {
+	if (ToggleButton(S_EditMode, Icons::Cogs + " Edit", "Show buttons to duplicate and reorder snippets")) {
 		S_EditMode = !S_EditMode;
 		g_armedDelete = -1;
 	}
@@ -321,6 +321,20 @@ void RenderSnippetRow(int index)
 		snippet.favorite = !snippet.favorite;
 		WriteSnippets();
 	}
+	UI::SameLine();
+
+	// Always available; it needs a second click, so a misclick can't throw a snippet away
+	bool armed = g_armedDelete == index;
+	bool deleteClicked = armed
+		? ColoredButton(Icons::Trash, HUE_RED, "Click again to delete", buttonSize)
+		: DarkButton(Icons::Trash, "Delete", buttonSize);
+	if (deleteClicked) {
+		if (armed) {
+			g_deleteIndex = index;
+		} else {
+			g_armedDelete = index;
+		}
+	}
 
 	if (S_EditMode) {
 		RenderEditModeButtons(index, buttonSize);
@@ -381,20 +395,6 @@ void RenderEditModeButtons(int index, const vec2 &in buttonSize)
 		g_moveTo = below;
 	}
 	UI::EndDisabled();
-	UI::SameLine();
-
-	// Delete needs a second click so a misclick can't throw a snippet away
-	bool armed = g_armedDelete == index;
-	bool deleteClicked = armed
-		? ColoredButton(Icons::Trash, HUE_RED, "Click again to delete", buttonSize)
-		: DarkButton(Icons::Trash, "Delete", buttonSize);
-	if (deleteClicked) {
-		if (armed) {
-			g_deleteIndex = index;
-		} else {
-			g_armedDelete = index;
-		}
-	}
 }
 
 void ApplyListChanges()

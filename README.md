@@ -20,7 +20,7 @@ Sending waits 1.5 seconds between messages, so a double click can't send twice, 
 - **Favorites** (the star) go in the quick bar. The star in the toolbar shows only favorites.
 - **Sorting**: manual order, most used first, or by name. Each snippet shows how often it was sent.
 - **Compact view** shows only the names; hover a name to see the text.
-- **Edit mode** adds buttons to duplicate, reorder and delete. Deleting asks for a second click, and can be undone for 10 seconds.
+- **Edit mode** adds buttons to duplicate and reorder. Deleting is always available; it asks for a second click and can be undone for 10 seconds.
 - The filter box searches names, groups and text.
 
 ## Editor
