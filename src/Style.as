@@ -43,8 +43,17 @@ void BoldText(const string &in text)
 	UI::PopFont();
 }
 
+// Every message a snippet sends, as it will look in chat
+void MessagesPreview(const string &in text, bool multiLine)
+{
+	auto lines = MessageLines(text, multiLine);
+	for (uint i = 0; i < lines.Length; i++) {
+		FormattedText(lines[i], UI::GetContentRegionAvail().x);
+	}
+}
+
 // Shows Trackmania-formatted text the way it will look in chat, on a dark background
-void ChatPreview(const string &in id, const string &in text)
+void ChatPreview(const string &in id, const string &in text, bool multiLine)
 {
 	UI::PushStyleColor(UI::Col::ChildBg, PREVIEW_BG);
 	UI::PushStyleVar(UI::StyleVar::ChildRounding, 4.0f);
@@ -52,7 +61,7 @@ void ChatPreview(const string &in id, const string &in text)
 	if (text == "") {
 		UI::TextDisabled("Nothing to preview yet");
 	} else {
-		UI::TextWrapped(Text::OpenplanetFormatCodes(text));
+		MessagesPreview(text, multiLine);
 	}
 	UI::EndChild();
 	UI::PopStyleVar();

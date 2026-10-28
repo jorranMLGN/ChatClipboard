@@ -114,6 +114,7 @@ void RenderClipboardWindow()
 	if (open) {
 		RenderToolbar();
 		RenderUndoDelete();
+		RenderSendProgress();
 		UI::Dummy(vec2(0, 2));
 		if (g_snippets.Length == 0) {
 			RenderEmptyState();
@@ -251,15 +252,23 @@ int RenderSnippetTable(const string &in group)
 void RenderSnippetRow(int index)
 {
 	auto snippet = g_snippets[index];
-	bool onServer = IsOnServer();
+	bool canChat = CanChat();
 	vec2 buttonSize = vec2(ActionButtonWidth(), 0);
 
 	UI::PushID("snippet" + index);
 	UI::TableNextRow();
 
 	UI::TableNextColumn();
+	// Buttons have padding around their text; this gives the name line the same height so the
+	// name and the badges line up with the buttons next to them
+	UI::AlignTextToFramePadding();
 	if (snippet.favorite) {
 		UI::Text("\\$fd0" + Icons::Star);
+		UI::SameLine();
+	}
+	// The icon in the regular font: the bold font may not include the icon glyphs
+	if (snippet.icon != "") {
+		UI::Text(snippet.icon);
 		UI::SameLine();
 	}
 	BoldText(snippet.name);
@@ -268,21 +277,29 @@ void RenderSnippetRow(int index)
 	}
 	RenderBadges(snippet);
 	if (!S_CompactView) {
-		UI::TextWrapped(Text::OpenplanetFormatCodes(snippet.text));
+		MessagesPreview(snippet.text, snippet.multiLine);
 	}
 
 	UI::TableNextColumn();
-	UI::BeginDisabled(!onServer || !CanSendNow());
-	string sendTooltip = onServer ? "Send to chat\n\\$888Right click: send to team" : "Join a server to send messages";
-	if (ColoredButton(Icons::PaperPlane, HUE_GREEN, sendTooltip, buttonSize)) {
+	UI::BeginDisabled(!canChat || !CanSendNow());
+	string sendTooltip = canChat ? "Send to chat\n\\$888Right click: send to team" : (IsOnServer() ? "Wait for the map to load to send messages" : "Join a server to send messages");
+	// The paper plane's weight is in its right wing, so a centered plane looks about 2px too far
+	// right (measured on a screenshot). The icon fills the button, so text alignment can't move
+	// it; less left padding with left alignment does.
+	vec2 padding = UI::GetStyleVarVec2(UI::StyleVar::FramePadding);
+	UI::PushStyleVar(UI::StyleVar::FramePadding, vec2(padding.x - 2 * UI::GetScale(), padding.y));
+	UI::PushStyleVar(UI::StyleVar::ButtonTextAlign, vec2(0.0f, 0.5f));
+	bool sendClicked = ColoredButton(Icons::PaperPlane, HUE_GREEN, sendTooltip, buttonSize);
+	UI::PopStyleVar(2);
+	if (sendClicked) {
 		SendSnippet(snippet);
 	}
 	UI::EndDisabled();
-	if (onServer && UI::BeginPopupContextItem("sendMenu")) {
+	if (canChat && UI::BeginPopupContextItem("sendMenu")) {
 		if (UI::MenuItem("Send to everyone")) {
 			SendSnippet(snippet);
 		}
-		if (UI::MenuItem("Send to team")) {
+		if (TeamMenuItem()) {
 			SendSnippet(snippet, true);
 		}
 		UI::EndPopup();
@@ -307,6 +324,9 @@ void RenderSnippetRow(int index)
 
 	if (S_EditMode) {
 		RenderEditModeButtons(index, buttonSize);
+	} else {
+		// Keep the room the edit mode buttons take, so rows don't change height when switching
+		UI::Dummy(vec2(buttonSize.x, UI::GetFrameHeight()));
 	}
 
 	UI::PopID();
@@ -323,6 +343,11 @@ void RenderBadges(Snippet@ snippet)
 	if (snippet.hotkey != VirtualKey::None) {
 		UI::SameLine();
 		UI::TextDisabled(Icons::KeyboardO + " " + KeyName(snippet.hotkey));
+	}
+	int messages = int(MessageLines(snippet.text, snippet.multiLine).Length);
+	if (messages > 1) {
+		UI::SameLine();
+		UI::TextDisabled(Icons::List + " " + messages + " messages");
 	}
 	if (snippet.uses > 0) {
 		UI::SameLine();

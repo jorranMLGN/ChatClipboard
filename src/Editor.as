@@ -21,6 +21,8 @@ string g_editName = "";
 string g_editText = "";
 string g_editGroup = "";
 bool g_editFavorite = false;
+bool g_editMultiLine = false;
+string g_editIcon = "";
 VirtualKey g_editHotkey = VirtualKey::None;
 
 // Selection in g_editText as byte offsets, from the last frame the text box was active.
@@ -49,12 +51,16 @@ void OpenEditor(int index)
 		g_editGroup = "";
 		g_editFavorite = false;
 		g_editHotkey = VirtualKey::None;
+		g_editMultiLine = false;
+		g_editIcon = "";
 	} else {
 		g_editName = g_snippets[index].name;
 		g_editText = g_snippets[index].text;
 		g_editGroup = g_snippets[index].group;
 		g_editFavorite = g_snippets[index].favorite;
 		g_editHotkey = g_snippets[index].hotkey;
+		g_editMultiLine = g_snippets[index].multiLine;
+		g_editIcon = g_snippets[index].icon;
 	}
 	g_capturingHotkey = false;
 	g_selStart = g_selEnd = int(g_editText.Length);
@@ -162,42 +168,106 @@ string HexDigit(float channel)
 	return HEX_DIGITS.SubStr(value, 1);
 }
 
-// Gives every character its own color, fading from one color to the other
+// Gives every character its own color, fading from one color to the other. Only color codes in
+// the text are replaced; other formatting such as bold, italics and links stays where it was.
 string MakeGradient(const string &in text, const vec3 &in from, const vec3 &in to)
 {
-	auto pieces = GradientPieces(Text::StripFormatCodes(text));
+	auto pieces = GradientPieces(text);
+
+	int visibleCount = 0;
+	for (uint i = 0; i < pieces.Length; i++) {
+		if (pieces[i].visible) {
+			visibleCount++;
+		}
+	}
 
 	string result = "$<";
 	string lastCode = "";
+	int visibleIndex = 0;
 	for (uint i = 0; i < pieces.Length; i++) {
-		float t = pieces.Length > 1 ? float(i) / float(pieces.Length - 1) : 0.0f;
+		if (!pieces[i].visible) {
+			result += pieces[i].text;
+			// $z and $> also reset the color, so the next character needs its code again
+			string codeText = pieces[i].text.ToLower();
+			if (codeText == "$z" || codeText == "$>") {
+				lastCode = "";
+			}
+			continue;
+		}
+		float t = visibleCount > 1 ? float(visibleIndex) / float(visibleCount - 1) : 0.0f;
 		string code = ColorCode(from + (to - from) * t);
 		// Spaces don't show a color, and with only 16 steps per channel neighbours often match
-		if (pieces[i] != " " && code != lastCode) {
+		if (pieces[i].text != " " && code != lastCode) {
 			result += code;
 			lastCode = code;
 		}
-		result += pieces[i] == "$" ? "$$" : pieces[i];
+		result += pieces[i].text;
+		visibleIndex++;
 	}
 	return result + "$>";
 }
 
-// The pieces a gradient colors one by one: single characters, and variables like {map} as a
-// whole, because a color code inside a variable would stop it from being filled in
-array<string> GradientPieces(const string &in plain)
+class GradientPiece
 {
-	array<string> pieces;
+	string text;
+	// false for format codes, which are kept but don't get a color of their own
+	bool visible;
+
+	GradientPiece(const string &in text, bool visible)
+	{
+		this.text = text;
+		this.visible = visible;
+	}
+}
+
+// Splits text into what a gradient works on: visible characters (with variables like {map} as
+// one piece, because a color code inside a variable would stop it from being filled in) and the
+// format codes around them. Color codes are dropped here, since the gradient replaces them.
+array<GradientPiece@> GradientPieces(const string &in text)
+{
+	array<GradientPiece@> pieces;
 	int i = 0;
-	while (i < plain.Length) {
-		int length = VariableLengthAt(plain, i);
+	while (i < text.Length) {
+		if (text[i] == 0x24 && i + 1 < text.Length) {
+			uint8 code = text[i + 1];
+			if (code == 0x24) {
+				// $$ is a visible dollar sign
+				pieces.InsertLast(GradientPiece("$$", true));
+				i += 2;
+			} else if (IsHexDigit(code)) {
+				// Old color code: up to three hex digits, dropped
+				int digits = 1;
+				while (digits < 3 && i + 1 + digits < text.Length && IsHexDigit(text[i + 1 + digits])) {
+					digits++;
+				}
+				i += 1 + digits;
+			} else if ((code | 0x20) == 0x67) {
+				// $g resets the color, dropped as well
+				i += 2;
+			} else {
+				// Any other code is kept as it is; a link keeps its [url] too
+				int length = 2;
+				uint8 lower = code | 0x20;
+				bool isLink = lower == 0x6c || lower == 0x68 || lower == 0x70;
+				if (isLink && i + 2 < text.Length && text[i + 2] == 0x5b) {
+					int close = text.SubStr(i + 2).IndexOf("]");
+					length = close < 0 ? text.Length - i : close + 3;
+				}
+				pieces.InsertLast(GradientPiece(text.SubStr(i, length), false));
+				i += length;
+			}
+			continue;
+		}
+
+		int length = VariableLengthAt(text, i);
 		if (length == 0) {
 			// One UTF-8 character: a lead byte plus its continuation bytes, which look like 10xxxxxx
 			length = 1;
-			while (i + length < plain.Length && (plain[i + length] & 0xC0) == 0x80) {
+			while (i + length < text.Length && (text[i + length] & 0xC0) == 0x80) {
 				length++;
 			}
 		}
-		pieces.InsertLast(plain.SubStr(i, length));
+		pieces.InsertLast(GradientPiece(text.SubStr(i, length), true));
 		i += length;
 	}
 	return pieces;
@@ -270,13 +340,24 @@ void RenderEditorToolbar()
 		}
 		UI::SameLine();
 	}
+	UI::NewLine();
+
+	// Its own row, so the picker isn't mistaken for one of the fixed colors above
+	ToolbarLabel("Custom");
 	g_customColor = UI::InputColor3("##custom", g_customColor, UI::ColorEditFlags::NoInputs | UI::ColorEditFlags::NoLabel);
 	if (UI::IsItemHovered()) {
-		UI::SetTooltip("Pick a custom color");
+		UI::SetTooltip("Click to pick a color");
 	}
 	UI::SameLine();
 	string customCode = ColorCode(g_customColor);
-	if (DarkButton("Use##custom", "Apply " + customCode + " at " + target)) {
+	UI::AlignTextToFramePadding();
+	UI::TextDisabled(customCode);
+	if (UI::IsItemHovered()) {
+		UI::SetTooltip("The format code for this color, as it goes into the message.\nTrackmania colors have 16 steps per channel, so the picked color is rounded to the nearest one.");
+	}
+	UI::SameLine();
+	// The drop on the button has the picked color, so it shows what Use will apply
+	if (DarkButton(Text::OpenplanetFormatCodes(customCode) + Icons::Tint + "\\$z Use##custom", "Apply " + customCode + " at " + target)) {
 		ApplyCode(customCode);
 	}
 
@@ -368,8 +449,11 @@ void SaveEditor(const string &in name)
 		@snippet = g_snippets[g_editIndex];
 	}
 	snippet.name = name;
-	// A chat message is a single line, so Enter in the text box shouldn't end up in it
-	snippet.text = g_editText.Replace("\r", "").Replace("\n", " ");
+	// A chat message is a single line, so new lines only stay when each line is sent separately
+	string text = g_editText.Replace("\r", "");
+	snippet.text = g_editMultiLine ? text : text.Replace("\n", " ");
+	snippet.multiLine = g_editMultiLine;
+	snippet.icon = g_editIcon;
 	snippet.group = g_editGroup.Trim();
 	snippet.favorite = g_editFavorite;
 	snippet.hotkey = g_editHotkey;
@@ -401,6 +485,119 @@ void RenderHotkeyField()
 	}
 }
 
+// A small bar with formatting buttons that pops up above selected text.
+// Openplanet doesn't say where the selection is on screen, so the bar goes where the mouse was
+// released after selecting, or above the text box when selecting with the keyboard.
+bool g_selectionBarVisible = false;
+vec2 g_selectionBarAnchor;
+// From the previous frame: clicking the bar deactivates the text box, which would otherwise hide it
+bool g_mouseOverSelectionBar = false;
+// Size of the bar last frame, to center it before it is drawn
+vec2 g_selectionBarSize;
+
+void UpdateSelectionBar(bool textBoxActive, const vec2 &in textBoxPos)
+{
+	if (!HasSelection()) {
+		g_selectionBarVisible = false;
+		return;
+	}
+	if (textBoxActive) {
+		if (UI::IsMouseDown() && !g_mouseOverSelectionBar) {
+			// Still dragging out the selection
+			g_selectionBarVisible = false;
+			return;
+		}
+		if (!g_selectionBarVisible) {
+			// Releasing the mouse ends a mouse selection, and the mouse is then at its end
+			bool selectedWithMouse = UI::IsMouseReleased();
+			g_selectionBarAnchor = selectedWithMouse ? UI::GetMousePos() : textBoxPos + vec2(UI::GetContentRegionAvail().x / 2, 0);
+		}
+		g_selectionBarVisible = true;
+		return;
+	}
+	// The text box lost focus: keep the bar only while it's being used or refocusing after a click
+	g_selectionBarVisible = g_selectionBarVisible && (g_mouseOverSelectionBar || g_refocus);
+}
+
+void RenderSelectionBar()
+{
+	if (!g_selectionBarVisible || !g_editorOpen) {
+		g_mouseOverSelectionBar = false;
+		return;
+	}
+
+	// A separate window would end up behind the focused editor, and focusing it would end the
+	// text selection. As a child drawn last inside the editor it is always on top and gets the clicks.
+	// It is centered above the anchor using last frame's size, and kept inside the editor window.
+	float scale = UI::GetScale();
+	vec2 windowPos = UI::GetWindowPos();
+	vec2 windowSize = UI::GetWindowSize();
+	vec2 barPos = g_selectionBarAnchor - vec2(g_selectionBarSize.x / 2, g_selectionBarSize.y + 10 * scale);
+	barPos.x = Math::Clamp(barPos.x, windowPos.x, Math::Max(windowPos.x, windowPos.x + windowSize.x - g_selectionBarSize.x));
+	barPos.y = Math::Max(barPos.y, windowPos.y);
+
+	vec2 cursor = UI::GetCursorPos();
+	UI::SetCursorScreenPos(barPos);
+	// Opaque, so the text box behind it doesn't show through
+	vec4 background = UI::GetStyleColor(UI::Col::PopupBg);
+	background.w = 1.0f;
+	UI::PushStyleColor(UI::Col::ChildBg, background);
+	UI::PushStyleVar(UI::StyleVar::WindowPadding, vec2(6, 6));
+	UI::PushStyleVar(UI::StyleVar::ItemSpacing, vec2(3, 3));
+	UI::PushStyleVar(UI::StyleVar::ChildRounding, 6.0f);
+	int childFlags = UI::ChildFlags::AutoResizeX | UI::ChildFlags::AutoResizeY | UI::ChildFlags::Borders | UI::ChildFlags::AlwaysUseWindowPadding;
+	if (UI::BeginChild("selectionBar", vec2(0, 0), childFlags, UI::WindowFlags::NoScrollbar)) {
+		for (uint i = 0; i < COLOR_CODES.Length; i++) {
+			if (ColorSwatch(COLOR_CODES[i], "barColor" + i, COLOR_NAMES[i])) {
+				ApplyCode(COLOR_CODES[i]);
+			}
+			UI::SameLine();
+		}
+		string customCode = ColorCode(g_customColor);
+		if (DarkButton(Text::OpenplanetFormatCodes(customCode) + Icons::Tint + "##barCustom", "Custom color " + customCode)) {
+			ApplyCode(customCode);
+		}
+
+		// Short labels; the tooltips name them
+		const array<string> labels = { "B", "\\$iI", "W", "N", "Aa", "S" };
+		for (uint i = 0; i < STYLE_CODES.Length; i++) {
+			if (i > 0) {
+				UI::SameLine();
+			}
+			if (DarkButton(labels[i] + "##barStyle" + i, STYLE_NAMES[i])) {
+				ApplyCode(STYLE_CODES[i]);
+			}
+		}
+		UI::SameLine();
+		if (DarkButton("Link##barLink", "Make the selection a link")) {
+			ApplyLink();
+		}
+		UI::SameLine();
+		string gradientLabel = Text::OpenplanetFormatCodes(ColorCode(g_gradientFrom)) + Icons::Tint
+			+ Text::OpenplanetFormatCodes(ColorCode(g_gradientTo)) + Icons::Tint + "##barGradient";
+		if (DarkButton(gradientLabel, "Gradient with the colors from the toolbar")) {
+			ReplaceSelection(MakeGradient(SelectedText(), g_gradientFrom, g_gradientTo), true);
+		}
+		UI::SameLine();
+		if (DarkButton(Icons::Times + "##barClear", "Clear formatting")) {
+			ClearFormatting();
+		}
+
+		vec2 pos = UI::GetWindowPos();
+		g_selectionBarSize = UI::GetWindowSize();
+		vec2 mouse = UI::GetMousePos();
+		g_mouseOverSelectionBar = mouse.x >= pos.x && mouse.x <= pos.x + g_selectionBarSize.x
+			&& mouse.y >= pos.y && mouse.y <= pos.y + g_selectionBarSize.y;
+	}
+	UI::EndChild();
+	UI::PopStyleVar(3);
+	UI::PopStyleColor();
+
+	// Back to where the editor's layout was, so the bar doesn't move anything else
+	UI::SetCursorPos(cursor);
+	UI::Dummy(vec2(0, 0));
+}
+
 void RenderEditorWindow()
 {
 	if (!g_editorOpen) {
@@ -418,9 +615,16 @@ void RenderEditorWindow()
 		UI::SetNextItemWidth(-1);
 		g_editName = UI::InputText("##name", g_editName);
 		RenderGroupField();
+		ToolbarLabel("Icon");
+		g_editIcon = IconPicker("snippetIcon", g_editIcon);
 		RenderHotkeyField();
 		ToolbarLabel("");
 		g_editFavorite = UI::Checkbox(Icons::Star + " Favorite (shown in the quick bar)", g_editFavorite);
+		ToolbarLabel("");
+		g_editMultiLine = UI::Checkbox(Icons::List + " Send each line as a separate message (max " + MAX_LINES + ")", g_editMultiLine);
+		if (UI::IsItemHovered()) {
+			UI::SetTooltip("Chat messages are one line. With this on, every line you type with Enter is sent as its own message, with a pause in between (see the settings).");
+		}
 
 		UI::SeparatorTextOpenplanet("Message");
 		RenderEditorToolbar();
@@ -430,24 +634,36 @@ void RenderEditorWindow()
 			UI::SetKeyboardFocusHere();
 			g_refocus = false;
 		}
+		vec2 textBoxPos = UI::GetCursorScreenPos();
 		g_editText = UI::InputTextMultiline("##text", g_editText, vec2(-1, 110),
 			UI::InputTextFlags(UI::InputTextFlags::WordWrap | UI::InputTextFlags::CallbackAlways),
 			UI::InputTextCallback(EditorTextCallback));
+		UpdateSelectionBar(UI::IsItemActive(), textBoxPos);
 
-		bool tooLong = g_editText.Length > MAX_MESSAGE_LENGTH;
-		UI::TextDisabled((tooLong ? "\\$f80" : "") + g_editText.Length + " / " + MAX_MESSAGE_LENGTH);
+		auto lines = MessageLines(g_editText, g_editMultiLine);
+		int longest = 0;
+		for (uint i = 0; i < lines.Length; i++) {
+			longest = Math::Max(longest, int(lines[i].Length));
+		}
+		bool tooLong = longest > MAX_MESSAGE_LENGTH;
+		bool tooManyLines = int(lines.Length) > MAX_LINES;
+		string counter = (tooLong ? "\\$f80" : "") + longest + " / " + MAX_MESSAGE_LENGTH;
+		if (g_editMultiLine) {
+			counter = (tooManyLines ? "\\$f80" : "") + lines.Length + " / " + MAX_LINES + " messages\\$z\\$888, longest " + counter;
+		}
+		UI::TextDisabled(counter);
 		if (UI::IsItemHovered()) {
 			UI::SetTooltip("Length including format codes. Longer messages get cut off in chat.");
 		}
 
 		UI::SeparatorTextOpenplanet("Preview");
-		ChatPreview("preview", ExpandVariables(g_editText));
+		ChatPreview("preview", ExpandVariables(g_editText), g_editMultiLine);
 		UI::Dummy(vec2(0, 4));
 
 		string name = g_editName.Trim();
 		auto existing = FindSnippet(name);
 		bool nameTaken = existing !is null && (g_editIndex < 0 || existing !is g_snippets[g_editIndex]);
-		bool valid = name != "" && g_editText.Trim() != "" && !nameTaken && !tooLong;
+		bool valid = name != "" && g_editText.Trim() != "" && !nameTaken && !tooLong && !tooManyLines;
 
 		// Ctrl+Enter also leaves the text box without adding a new line, so it can save from there
 		bool focused = UI::IsWindowFocused(UI::FocusedFlags::RootAndChildWindows);
@@ -473,9 +689,17 @@ void RenderEditorWindow()
 			UI::SameLine();
 			UI::AlignTextToFramePadding();
 			UI::Text("\\$f80" + Icons::ExclamationTriangle + " Too long for one chat message.");
+		} else if (tooManyLines) {
+			UI::SameLine();
+			UI::AlignTextToFramePadding();
+			UI::Text("\\$f80" + Icons::ExclamationTriangle + " At most " + MAX_LINES + " lines, one message each.");
 		}
+
+		// Last, so it's drawn on top of everything else in the editor
+		RenderSelectionBar();
 	}
 	UI::End();
 	// Pushed before Begin, so it can only be popped after End
 	UI::PopStyleVar();
+
 }

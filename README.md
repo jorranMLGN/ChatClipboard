@@ -16,6 +16,7 @@ Sending waits 1.5 seconds between messages, so a double click can't send twice, 
 ## Organizing
 
 - **Groups** list snippets under collapsible headings, e.g. "Tips" and "Chat".
+- **Icons**: pick one of about 50 icons in the editor; it shows in the list, on the quick bar and in Better Chat's suggestions.
 - **Favorites** (the star) go in the quick bar. The star in the toolbar shows only favorites.
 - **Sorting**: manual order, most used first, or by name. Each snippet shows how often it was sent.
 - **Compact view** shows only the names; hover a name to see the text.
@@ -26,7 +27,7 @@ Sending waits 1.5 seconds between messages, so a double click can't send twice, 
 
 Trackmania chat uses format codes such as `$f00` (red), `$o` (bold) and `$l` (link). The editor writes them for you:
 
-- Select text and click a color, style or **Link** to format just that part. It is wrapped in `$<...$>` so the rest of the text keeps its own formatting. Without a selection, the code is inserted at the cursor.
+- Select text and click a color, style or **Link** to format just that part. A small bar with the same buttons pops up above your selection, so you don't have to reach for the toolbar. It is wrapped in `$<...$>` so the rest of the text keeps its own formatting. Without a selection, the code is inserted at the cursor.
 - Pick any color with the color picker and click **Use**.
 - **Gradient** fades the selected text from one color to another, letter by letter.
 - **Insert** adds a variable that is filled in when the snippet is sent: `{map}`, `{author}`, `{player}`, `{server}` or `{time}`.
@@ -38,9 +39,9 @@ The preview shows the message as it will look in chat, with variables filled in.
 
 Under **Settings → Chat Clipboard**:
 
-- **General**: show the window without the overlay, a key to toggle the window, turn snippet hotkeys on or off.
-- **Quick bar**: show it, show it without the overlay, vertical layout, background opacity.
-- **Better Chat**: the `/clip-` commands and the button in Better Chat's sidebar.
+- **General**: show the window without the overlay, a key to toggle the window, snippet hotkeys on or off, the wait after sending, the pause between lines of multi-line snippets, and whether copying shows a message in chat.
+- **Quick bar**: show it, show it without the overlay, icons only, vertical layout, background opacity.
+- **Better Chat**: the command prefix (`clip-` by default), the per-snippet commands, and the button in Better Chat's sidebar.
 
 ## Storage
 
@@ -55,7 +56,9 @@ src/
   Snippets.as          snippet model, loading and saving
   Variables.as         {map}, {author}... placeholders
   Hotkeys.as           snippet hotkeys, toggle key, picking a key in the editor
+  SnippetIcons.as      the icons a snippet can have, and the icon picker
   Style.as             shared button and preview styles
+  FormattedText.as     draws format codes like the game does (Openplanet UI only knows colors and italics)
   Interface.as         clipboard window
   Editor.as            snippet editor with formatting toolbar
   QuickBar.as          the favorites bar

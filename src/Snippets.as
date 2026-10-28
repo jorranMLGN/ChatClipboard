@@ -11,6 +11,10 @@ class Snippet
 	VirtualKey hotkey = VirtualKey::None;
 	// How often the snippet was sent, for sorting by most used
 	int uses = 0;
+	// Send every line as its own chat message instead of one message
+	bool multiLine = false;
+	// Icon shown in front of the name (one of SNIPPET_ICONS), or "" for none
+	string icon = "";
 
 	Snippet(const string &in name, const string &in text, const string &in group = "")
 	{
@@ -31,6 +35,28 @@ Snippet@ FindSnippet(const string &in name)
 		}
 	}
 	return null;
+}
+
+// Chat messages are one line each; a snippet can send up to this many lines as separate messages
+const int MAX_LINES = 5;
+
+// The messages a snippet is sent as. Without multiLine, new lines become spaces and it's one
+// message; with it, every non-empty line is its own message.
+array<string> MessageLines(const string &in text, bool multiLine)
+{
+	array<string> lines;
+	string clean = text.Replace("\r", "");
+	if (!multiLine) {
+		lines.InsertLast(clean.Replace("\n", " "));
+		return lines;
+	}
+	auto parts = clean.Split("\n");
+	for (uint i = 0; i < parts.Length; i++) {
+		if (parts[i].Trim() != "") {
+			lines.InsertLast(parts[i]);
+		}
+	}
+	return lines;
 }
 
 string StoragePath()
@@ -98,6 +124,14 @@ Snippet@ SnippetFromJson(Json::Value@ obj)
 		int uses = obj["uses"];
 		snippet.uses = uses;
 	}
+	if (obj.HasKey("multiLine")) {
+		bool multiLine = obj["multiLine"];
+		snippet.multiLine = multiLine;
+	}
+	if (obj.HasKey("icon")) {
+		string icon = obj["icon"];
+		snippet.icon = icon;
+	}
 	return snippet;
 }
 
@@ -118,6 +152,12 @@ Json::Value@ SnippetToJson(Snippet@ snippet)
 	}
 	if (snippet.uses > 0) {
 		obj["uses"] = snippet.uses;
+	}
+	if (snippet.multiLine) {
+		obj["multiLine"] = true;
+	}
+	if (snippet.icon != "") {
+		obj["icon"] = snippet.icon;
 	}
 	return obj;
 }

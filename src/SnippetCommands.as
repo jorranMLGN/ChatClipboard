@@ -15,12 +15,12 @@ class SnippetCommand : BetterChat::ICommand
 
 	string Icon()
 	{
-		return Icons::Clipboard;
+		return m_snippet.icon == "" ? Icons::Clipboard : m_snippet.icon;
 	}
 
 	string Description()
 	{
-		return Shorten(Text::StripFormatCodes(m_snippet.text), 60);
+		return Shorten(Text::StripFormatCodes(m_snippet.text).Replace("\n", " / "), 60);
 	}
 
 	void Run(const string &in text)
@@ -73,7 +73,23 @@ string CommandName(const string &in snippetName)
 	if (slug.EndsWith("-")) {
 		slug = slug.SubStr(0, slug.Length - 1);
 	}
-	return slug == "" ? "" : "clip-" + slug;
+	return slug == "" ? "" : CommandPrefix() + slug;
+}
+
+// The prefix from the settings with anything Better Chat doesn't accept left out. It is never
+// empty: without one, a snippet named "Version" would replace Better Chat's own /version.
+string CommandPrefix()
+{
+	string prefix = "";
+	string lower = S_CommandPrefix.ToLower();
+	for (int i = 0; i < lower.Length; i++) {
+		uint8 c = lower[i];
+		bool allowed = (c >= 0x61 && c <= 0x7A) || (c >= 0x30 && c <= 0x39) || c == 0x2D || c == 0x5F;
+		if (allowed) {
+			prefix += lower.SubStr(i, 1);
+		}
+	}
+	return prefix == "" ? "clip-" : prefix;
 }
 
 string Shorten(const string &in text, int maxBytes)

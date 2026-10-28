@@ -31,7 +31,7 @@ UI::InputBlocking HandleKeyPress(VirtualKey key)
 		return UI::InputBlocking::Block;
 	}
 
-	if (!S_Hotkeys || !IsOnServer()) {
+	if (!S_Hotkeys || !CanChat()) {
 		return UI::InputBlocking::DoNothing;
 	}
 	for (uint i = 0; i < g_snippets.Length; i++) {
